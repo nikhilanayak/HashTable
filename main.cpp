@@ -1,5 +1,10 @@
 #include <iostream>
+#include <fstream>
+#include <limits>
+#include <algorithm>
 #include <stdio.h>
+#include <cstdlib> 
+#include <ctime>
 
 template<typename T>
 T get_type(){ // gets input of a type, ignoring all other types
@@ -35,6 +40,13 @@ public:
 		this->GPA = get_type<float>();
 	}
 
+	Student(char* first_name, char* last_name, int student_id, float GPA){
+		strcpy(this->first_name, first_name);
+		strcpy(this->last_name, last_name);
+		this->student_id = student_id;
+		this->GPA = GPA;
+	}
+
 	void print(){
 		printf("(%s %s: student id=%i, GPA=%.3f)", this->first_name, this->last_name, this->student_id, this->GPA);
 	}
@@ -64,6 +76,7 @@ typedef struct Node{
 class Bucket{
 public:
 Node* head = NULL;
+int size = 0;
 	Bucket(){
 
 	}
@@ -78,6 +91,29 @@ Node* head = NULL;
 		return NULL;
 	}
 
+	void delete_(int key){
+		Node* curr = this->head;
+		Node* next = curr->next;
+
+		if(next == NULL){
+			delete this->head;
+			this->head = NULL;
+			this->size = 0;
+			return;
+		}
+
+		while(next != NULL){
+			if(next->data->key == key){
+				curr->next = next->next;
+				this->size--;
+				return;
+			}
+			curr = curr->next;
+			next = next->next;
+		}
+	}
+
+
 
 	void add(int key, Student* value){
 		Pair* p = new Pair();
@@ -88,9 +124,8 @@ Node* head = NULL;
 		n->data = p;
 		n->next = head;
 		this->head = n;
+		this->size += 1;
 	}
-
-
 };
 
 
@@ -99,9 +134,8 @@ Node* head = NULL;
 class Hashmap{
 private:
 
-Bucket* buckets[128];
-int num_buckets = 128;
-	
+//Bucket* buckets[128];
+
 	int hash(char* data){
 		int sum = 0;
 		for(int i = 0, len=strlen(data); i < len; i++){
@@ -112,28 +146,39 @@ int num_buckets = 128;
 	}
 	
 public:
-	Hashmap(){
+Bucket** buckets;
+int num_buckets;
+	Hashmap(int num_buckets){
+		this->num_buckets = num_buckets;
+		buckets = new Bucket*[this->num_buckets];
+
 		for(int i = 0; i < this->num_buckets; i++){
 			this->buckets[i] = new Bucket();
 		}
 	}
 
-	void add(Pair* p){
+	int add(Pair* p){
 		int bucket = p->key % num_buckets;
 		buckets[bucket]->add(p->key, p->value);
+		return bucket;
 	}
 
-	void add(int key, Student* value){
+	int add(int key, Student* value){
 		Pair* p = new Pair();
 		p->key = key;
 		p->value = value;
-		this->add(p);
+		return this->add(p);
 	}
 
 	Student* get(int key){
 		int bucket = key % num_buckets;
 		Pair* p = buckets[bucket]->get(key);
 		return p->value;
+	}
+
+	void delete_(int key){
+		int bucket = key % num_buckets;
+		buckets[bucket]->delete_(key);
 	}
 
 	bool exists(int key){
@@ -148,7 +193,6 @@ public:
 			std::cout << "bucket " << i << ": ";
 			Node* curr = buckets[i]->head;
 			while(curr != NULL){
-				//std::cout << "(" << curr->data->key << "=" << curr->data->value << ")->";
 				curr->data->value->print();
 				std::cout << "->";
 				curr = curr->next;
@@ -158,23 +202,93 @@ public:
 
 	}
 
+	Hashmap* double_buckets(){
+		Hashmap* newhm = new Hashmap(this->num_buckets * 2);
+
+		for(int i = 0; i < this->num_buckets; i++){
+			Node* head = this->buckets[i]->head;
+			while(head != NULL){
+				newhm->add(head->data);
+				head = head->next;
+			}
+
+		}
+		return newhm;
+	}
 };
 
 
+char* get_first_name(){
+	std::fstream fnames;
+	fnames.open("FIRST_NAMES.txt", std::ios::in);
+	int index = rand() % 100;
+	char* out = new char[256];
+	for(int i = 0; i < index; i++) fnames >> out;
+	return out;
+}
+char* get_last_name(){
+	std::fstream fnames;
+	fnames.open("LAST_NAMES.txt", std::ios::in);
+	int index = rand() % 100;
+	char* out = new char[256];
+	for(int i = 0; i < index; i++) fnames >> out;
+	return out;
+}
+
 
 int main(){
+	srand((unsigned)time(0)); 
 
 
-	
-	Hashmap* h = new Hashmap();
-	
-	Student* s = new Student();
-	h->add(s->student_id, s);
+	Hashmap* h = new Hashmap(2);
+	while(true){
+		std::cout << "A(dd) P(rint) D(elete) Q(uit), R(andom): ";
+		char next_line[256];
+		std::cin >> next_line;
+		char input = next_line[0];
+		switch(input){
+			case 'A': {
+				Student* s = new Student();
+				int b = h->add(s->student_id, s);
+				if(h->buckets[b]->size > 3){
+					std::cout << "collision\n";
+				}
+				break;}
+			case 'P':{
+				for(int i = 0; i < h->num_buckets; i++){
+					Node* curr = h->buckets[i]->head;
+					while(curr != NULL){
+						curr->data->value->print();
+						std::cout << "\n";
+						curr = curr->next;
+					}
 
-	Student* s1 = new Student();
-	h->add(s1->student_id, s1);
+				}
+				break;}
+			case 'D':{
+				std::cout << "Student id: ";
+				int id = get_type<int>();
+				h->delete_(id);
+				break;}
+			case 'Q':{
+				exit(0);
+				break;}
+			case 'R': {
+				std::cout << "How many: ";
+				int how_many = get_type<int>();
+				for(int i = 0; i < how_many; i++){
+					char* first_name = get_first_name();
+					char* last_name = get_last_name();
+					int id = 0;
+					while(h->exists(id)) id++;
+					Student* s = new Student(first_name, last_name, id, rand() / (RAND_MAX + 1.0) * 4.0);
+					h->add(id, s);
+				}
 
-	//std::cout << h->get(1) << "\n";
-	//std::cout << h->get(2) << "\n";
-	h->viz();
+				  break;}
+		}
+
+
+	}
+
 }
